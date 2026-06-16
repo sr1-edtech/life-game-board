@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Game of Life - Financial Literacy</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #e8edf2; color: #1a1a2e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
+
+#titlebar {
+  height: 32px; background: #1a1a2e; display: flex; align-items: center;
+  justify-content: center; border-bottom: 2px solid #0f3460; flex-shrink: 0; z-index: 50;
+}
+#titlebar span { font-size: 15px; font-weight: 800; color: #ffd700; letter-spacing: 1px; }
+
+#main { display: flex; flex: 1; overflow: hidden; }
+
+#sidebar {
+  width: 148px; min-width: 148px; background: #16213e; padding: 10px;
+  display: flex; flex-direction: column; gap: 10px; z-index: 10;
+  border-right: 2px solid #0f3460; color: #fff;
+}
+#sidebar h2 { font-size: 11px; text-transform: uppercase; color: #a0aec0; letter-spacing: 1px; text-align: center; }
+#dice-section { background: #0f3460; border-radius: 10px; padding: 10px; text-align: center; }
+#dice-result { font-size: 52px; font-weight: 900; color: #ffd700; min-height: 64px; line-height: 64px; }
+#roll-btn {
+  background: linear-gradient(135deg, #e94560, #c62a47); border: none; color: #fff;
+  padding: 8px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700; width: 100%; margin-top: 6px;
+}
+#roll-btn:active { transform: scale(0.95); }
+@keyframes shake { 0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg)}75%{transform:rotate(12deg)} }
+#roll-btn.rolling { animation: shake 0.4s; }
+#token-bank { background: #0f3460; border-radius: 10px; padding: 10px; flex: 1; }
+#token-bank-label { font-size: 11px; color: #a0aec0; text-align: center; margin-bottom: 8px; }
+#bank-area { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 40px; }
+#reset-btn {
+  background: #2d3748; border: 1px solid #4a5568; color: #a0aec0;
+  padding: 7px; border-radius: 8px; cursor: pointer; font-size: 12px; width: 100%;
+}
+#reset-btn:hover { background: #4a5568; color: #fff; }
+
+#board-wrap { flex: 1; position: relative; overflow: hidden; }
+#board { position: absolute; inset: 0; padding: 6px; }
+#tokens-layer { position: absolute; inset: 0; z-index: 200; pointer-events: none; }
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  width: 100%; height: 100%;
+  position: relative; z-index: 5;
+}
+
+.cell {
+  position: relative; border-radius: 8px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center;
+  padding: 3px 2px; border: 1.5px solid rgba(255,255,255,0.15);
+  cursor: pointer; overflow: hidden;
+  transition: transform 0.12s, box-shadow 0.12s; z-index: 5;
+}
+.cell:hover { transform: scale(1.06); box-shadow: 0 0 14px rgba(0,0,0,0.25); z-index: 6; }
+.cell .c-num   { font-size: 14px; font-weight: 900; color: rgba(255,255,255,0.55); line-height: 1; }
+.cell .c-emoji { font-size: 22px; line-height: 1.2; }
+.cell .c-label { font-size: 12px; font-weight: 700; color: #e2e8f0; line-height: 1.3; margin-top: 2px; }
+.cell .c-arrow { font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+
+.cell-start {
+  background: #1a6b3a !important; border: 2.5px solid #25a85a !important;
+  box-shadow: 0 0 12px rgba(37,168,90,0.5) !important;
+  cursor: default; pointer-events: none;
+}
+.cell-start .c-label, .cell-start span { color: #fff !important; }
+
+.cell-end {
+  background: #7b1fa2 !important; border: 2.5px solid #ce93d8 !important;
+  cursor: default; pointer-events: none; animation: ppurple 2s infinite;
+}
+@keyframes ppurple {
+  0%,100% { box-shadow: 0 0 10px #ce93d8, 0 0 22px rgba(206,147,216,0.4); }
+  50%      { box-shadow: 0 0 20px #ce93d8, 0 0 38px rgba(206,147,216,0.7); }
+}
+
+.cell-empty { background: transparent !important; border: none !important; cursor: default; pointer-events: none; }
+
+.cell-mandatory { border: 2.5px solid #ffd700 !important; animation: pgold 2s infinite; }
+@keyframes pgold {
+  0%,100% { box-shadow: 0 0 8px #ffd700, 0 0 18px rgba(255,215,0,0.35); }
+  50%      { box-shadow: 0 0 16px #ffd700, 0 0 32px rgba(255,215,0,0.65); }
+}
+
+.z-college { background: #1e3a5f; }
+.z-general { background: #1a3d2b; }
+.z-housing { background: #4a2c0a; }
+.z-vehicle { background: #0a3535; }
+.z-family  { background: #2d1a4a; }
+.z-later   { background: #1a1f4a; }
+.z-retire  { background: #3d2e00; }
+
+.token {
+  position: absolute; width: 36px; height: 36px; border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,0.75); display: flex; align-items: center;
+  justify-content: center; font-size: 11px; font-weight: 800; color: #fff;
+  cursor: grab; pointer-events: all;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.6); text-shadow: 0 1px 3px rgba(0,0,0,0.9); z-index: 200;
+}
+.token:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.8); transform: scale(1.1); }
+.token.is-dragging { cursor: grabbing; z-index: 9999; transform: scale(1.2); box-shadow: 0 6px 20px rgba(0,0,0,0.9); }
+
+#popup-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+  z-index: 5000; align-items: center; justify-content: center;
+}
+#popup-overlay.visible { display: flex; }
+#popup {
+  background: #16213e; border: 2px solid #ffd700; border-radius: 16px;
+  padding: 24px; max-width: 400px; width: 90%; position: relative;
+}
+#popup-mandatory { background: #e94560; color: #fff; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; display: none; margin-bottom: 8px; }
+#popup-title { font-size: 18px; font-weight: 800; color: #ffd700; margin-bottom: 10px; }
+#popup-body  { font-size: 15px; color: #e2e8f0; line-height: 1.65; }
+#popup-close { position: absolute; top: 10px; right: 14px; background: none; border: none; color: #a0aec0; font-size: 24px; cursor: pointer; }
+#popup-close:hover { color: #fff; }
+</style>
+</head>
+<body>
+
+<div id="titlebar"><span>🎲 The Game of Life Gameboard</span></div>
+
+<div id="main">
+  <div id="sidebar">
+    <h2>🎲 Game Controls</h2>
+    <div id="dice-section">
+      <div style="font-size:11px;color:#a0aec0;margin-bottom:2px;">DICE</div>
+      <div id="dice-result">–</div>
+      <button id="roll-btn">🎲 Roll</button>
+      <div id="last-roll" style="font-size:11px;color:#718096;margin-top:4px;min-height:14px;"></div>
+    </div>
+    <div id="token-bank">
+      <div id="token-bank-label">TOKEN BANK<br><span style="font-size:10px;color:#718096;">Drag tokens anywhere</span></div>
+      <div id="bank-area"></div>
+    </div>
+    <button id="reset-btn">↺ Reset Game</button>
+  </div>
+
+  <div id="board-wrap">
+    <div id="board">
+      <div id="grid"></div>
+      <div id="tokens-layer"></div>
+    </div>
+  </div>
+</div>
+
+<div id="popup-overlay">
+  <div id="popup">
+    <button id="popup-close">×</button>
+    <div id="popup-mandatory">⛔ MANDATORY STOP</div>
+    <div id="popup-title"></div>
+    <div id="popup-body"></div>
+  </div>
+</div>
+
+<script>
+// Grid: 4 rows × 10 cols
+// Row 0: Start1(col0-1), empty(col2-4), Start2(col5-6), empty(col7-9)
+// Row 1: 1,2,3,4,5,6,7,8,9,10  → left to right
+// Row 2: 20,19,18,17,16,15,14,13,12,11  → right to left
+// Row 3: 21,22,23,24,25,26,27,28,29,30  → left to right
+// Row 4: empty(col0-4), End(col5), 33,32,31  (col6-9) → right to left... 
+//        Actually: col0-4 empty, col5=End, col6=33, col7=32, col8=31, col9=empty? 
+//        From spec: 5 empty cols, then End, 33, 32, 31 = 4 items, total 9... col9 empty
+
+const GRID = [
+  // ROW 0 — starts
+  [
+    { type:'start', emoji:'🎓', label:'START\nCOLLEGE', sub:'Borrow $100.\nStart with $100.', zone:'z-college' },
+    { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' },
+    { type:'start', emoji:'💼', label:'START\nCAREER', sub:'Draw 2 workforce\ncareer cards\n& choose 1.\nStart with $100.', zone:'z-general' },
+    { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' },
+  ],
+  // ROW 1 — left→right, 1–10
+  [
+    { type:'space', num:'1',  emoji:'🎓', label:'Scholarship',     popup:'Scholarship! Collect $20.',                                                        mand:false, zone:'z-college', arrow:'→' },
+    { type:'space', num:'2',  emoji:'📚', label:'Textbooks',       popup:'Textbooks & Fees. Pay $15.',                                                       mand:false, zone:'z-college', arrow:'→' },
+    { type:'space', num:'3',  emoji:'💼', label:'Internship',      popup:'Internship Opportunity! Collect $20.',                                             mand:false, zone:'z-college', arrow:'→' },
+    { type:'space', num:'4',  emoji:'✈️', label:'Study Abroad',    popup:'Study Abroad Program. Pay $15.',                                                   mand:false, zone:'z-college', arrow:'→' },
+    { type:'space', num:'5',  emoji:'💼', label:'Career\nChoice',  popup:'Choose Your Career! Draw 3 college career cards and choose 1.',                    mand:true,  zone:'z-general', arrow:'→' },
+    { type:'space', num:'6',  emoji:'💰', label:'Overtime',        popup:'Overtime Opportunity! Collect $20.',                                               mand:false, zone:'z-general', arrow:'→' },
+    { type:'space', num:'7',  emoji:'🏥', label:'Medical\nExp.',   popup:'Medical Expense. Pay $20.',                                                        mand:false, zone:'z-general', arrow:'→' },
+    { type:'space', num:'8',  emoji:'👔', label:'Mentor',          popup:'Professional Mentor! Collect $20.',                                                mand:false, zone:'z-general', arrow:'→' },
+    { type:'space', num:'9',  emoji:'🚚', label:'Relocation',      popup:'Relocation for Work. Pay $15.',                                                    mand:false, zone:'z-general', arrow:'→' },
+    { type:'space', num:'10', emoji:'🏠', label:'Housing\nChoice', popup:'Choose Your Housing! House or Apartment?',                                         mand:true,  zone:'z-housing', arrow:'↓' },
+  ],
+  // ROW 2 — right→left, 20–11
+  [
+    { type:'space', num:'20', emoji:'💍', label:'Marriage',         popup:'Marriage! Draw 2 Spouse Cards. Choose 1 spouse card or remain single.',           mand:true,  zone:'z-family',  arrow:'↓' },
+    { type:'space', num:'19', emoji:'🎁', label:'Annual\nBonus',   popup:'Annual Bonus! Collect $30.',                                                       mand:false, zone:'z-family',  arrow:'←' },
+    { type:'space', num:'18', emoji:'📉', label:'Layoff',          popup:'Layoff! Miss your next paycheck.',                                                 mand:false, zone:'z-vehicle', arrow:'←' },
+    { type:'space', num:'17', emoji:'📈', label:'Promotion',       popup:'Promotion Opportunity! Collect $10 if you have a college degree. Otherwise, collect $5.', mand:false, zone:'z-vehicle', arrow:'←' },
+    { type:'space', num:'16', emoji:'🔧', label:'Car Repair',      popup:'Car Repair. Used Car: Pay $20. New Car: Pay $10. Luxury Vehicle: Pay $10.',        mand:false, zone:'z-vehicle', arrow:'←' },
+    { type:'space', num:'15', emoji:'🚗', label:'Vehicle\nChoice', popup:'Choose Your Vehicle! Used, New, or Luxury?',                                       mand:true,  zone:'z-vehicle', arrow:'←' },
+    { type:'space', num:'14', emoji:'🌪', label:'Natural\nDisaster',popup:'Natural Disaster. Pay $15.',                                                      mand:false, zone:'z-housing', arrow:'←' },
+    { type:'space', num:'13', emoji:'🧾', label:'Tax Refund',      popup:'Tax Refund! Collect $20.',                                                         mand:false, zone:'z-housing', arrow:'←' },
+    { type:'space', num:'12', emoji:'📈', label:'Cost of\nLiving', popup:'Cost of Living Increase. Pay $10.',                                                mand:false, zone:'z-housing', arrow:'←' },
+    { type:'space', num:'11', emoji:'🏠', label:'Rent\nIncrease',  popup:'Rent Increase. Pay $10.',                                                          mand:false, zone:'z-housing', arrow:'←' },
+  ],
+  // ROW 3 — left→right, 21–30
+  [
+    { type:'space', num:'21', emoji:'👨‍👩‍👧', label:'Family\nDecisions', popup:'Family Decisions! 0, 1, 2, or 3 children?',                               mand:true,  zone:'z-family',  arrow:'→' },
+    { type:'space', num:'22', emoji:'👶', label:'Childcare',        popup:'Childcare Costs. If you have children, pay $20 per child.',                       mand:false, zone:'z-family',  arrow:'→' },
+    { type:'space', num:'23', emoji:'🏦', label:'Retire\nMatch',    popup:'Employer Retirement Match! Add $20 to retirement savings.',                       mand:false, zone:'z-family',  arrow:'→' },
+    { type:'space', num:'24', emoji:'🌴', label:'Vacation',         popup:'Family Vacation. Pay $20.',                                                       mand:false, zone:'z-family',  arrow:'→' },
+    { type:'space', num:'25', emoji:'💵', label:'Inheritance',      popup:'Inheritance! Collect $30.',                                                       mand:false, zone:'z-family',  arrow:'→' },
+    { type:'space', num:'26', emoji:'🎓', label:'Child\nScholar',   popup:'Child Earns Scholarship! If you have one or more children, collect $20.',         mand:false, zone:'z-later',   arrow:'→' },
+    { type:'space', num:'27', emoji:'🚀', label:'Career\nAdvance',  popup:'Advance Your Career! Collect $20 if you have a college degree. Otherwise, collect $10.', mand:true, zone:'z-later', arrow:'→' },
+    { type:'space', num:'28', emoji:'📜', label:'Certification',    popup:'Professional Certification. Collect $10.',                                        mand:false, zone:'z-later',   arrow:'→' },
+    { type:'space', num:'29', emoji:'📈', label:'Stock\nMarket',    popup:'Stock Market Growth! Collect $20.',                                               mand:false, zone:'z-later',   arrow:'→' },
+    { type:'space', num:'30', emoji:'📉', label:'Recession',        popup:'Economic Recession. Collect $10 less at your next payday.',                       mand:false, zone:'z-later',   arrow:'↓' },
+  ],
+  // ROW 4 — empty(0-4), End(5), 33,32,31 (6-8), empty(9)
+  [
+    { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' },
+    { type:'end' },
+    { type:'space', num:'33', emoji:'🏆', label:'Legacy\nAward',    popup:'Community Legacy Award! Collect $10.',                                            mand:false, zone:'z-retire',  arrow:'←' },
+    { type:'space', num:'32', emoji:'🏥', label:'Healthcare',       popup:'Healthcare Expense. Pay $20.',                                                    mand:false, zone:'z-retire',  arrow:'←' },
+    { type:'space', num:'31', emoji:'💡', label:'Business\nOpport.',popup:'Business Opportunity. Pay $20. Roll: 1 Lose Investment; 2 Break Even; 3 Collect $50.', mand:false, zone:'z-later', arrow:'←' },
+  ],
+];
+
+const gridEl = document.getElementById('grid');
+gridEl.style.gridTemplateRows = `repeat(${GRID.length}, 1fr)`;
+
+GRID.forEach(row => {
+  row.forEach(cell => {
+    const div = document.createElement('div');
+
+    if (cell.type === 'empty') {
+      div.className = 'cell cell-empty';
+      gridEl.appendChild(div);
+      return;
+    }
+
+    if (cell.type === 'start') {
+      div.className = `cell cell-start ${cell.zone}`;
+      const lines = cell.sub.split('\n').map(l => `<span class="c-label" style="font-size:11px;">${l}</span>`).join('');
+      div.innerHTML = `<span class="c-emoji">${cell.emoji}</span><span class="c-label" style="color:#48bb78;font-weight:900;font-size:13px;">${cell.label.replace(/\n/,'<br>')}</span>${lines}`;
+      gridEl.appendChild(div);
+      return;
+    }
+
+    if (cell.type === 'end') {
+      div.className = 'cell cell-end z-retire';
+      div.innerHTML = `<span class="c-emoji" style="font-size:26px">🎉</span><span class="c-label" style="font-size:14px;font-weight:900;color:#fff;">RETIREMENT</span><span class="c-label" style="font-size:11px;color:#f3e5f5;">Calculate Net Worth</span>`;
+      gridEl.appendChild(div);
+      return;
+    }
+
+    // Regular space
+    div.className = `cell ${cell.zone}${cell.mand ? ' cell-mandatory' : ''}`;
+    div.innerHTML = `
+      <span class="c-num">${cell.num}</span>
+      <span class="c-emoji">${cell.emoji}</span>
+      <span class="c-label">${cell.label.replace(/\n/,'<br>')}</span>
+      <span class="c-arrow">${cell.arrow || ''}</span>
+      ${cell.mand ? '<span style="position:absolute;top:3px;left:3px;background:#e94560;color:#fff;font-size:8px;font-weight:700;padding:2px 5px;border-radius:20px;line-height:1.4;white-space:nowrap;">⛔ MANDATORY STOP</span>' : ''}`;
+    div.addEventListener('click', () => openPopup(cell));
+    gridEl.appendChild(div);
+  });
+});
+
+// ── POPUP ─────────────────────────────────────────────────────────────────────
+function openPopup(cell) {
+  document.getElementById('popup-mandatory').style.display = cell.mand ? 'inline-block' : 'none';
+  document.getElementById('popup-title').textContent = `${cell.emoji} ${cell.label.replace(/\n/,' ')}`;
+  document.getElementById('popup-body').textContent = cell.popup;
+  document.getElementById('popup-overlay').classList.add('visible');
+}
+document.getElementById('popup-close').onclick = () => document.getElementById('popup-overlay').classList.remove('visible');
+document.getElementById('popup-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('popup-overlay')) document.getElementById('popup-overlay').classList.remove('visible');
+});
+
+// ── DICE ──────────────────────────────────────────────────────────────────────
+const diceEl = document.getElementById('dice-result');
+const rollBtn = document.getElementById('roll-btn');
+let rollTimer;
+rollBtn.addEventListener('click', () => {
+  rollBtn.disabled = true; rollBtn.classList.add('rolling');
+  clearInterval(rollTimer); let count = 0;
+  rollTimer = setInterval(() => {
+    diceEl.textContent = Math.ceil(Math.random()*3);
+    if (++count >= 9) {
+      clearInterval(rollTimer);
+      const f = Math.ceil(Math.random()*3);
+      diceEl.textContent = f;
+      document.getElementById('last-roll').textContent = `Last: ${f}`;
+      rollBtn.disabled = false; rollBtn.classList.remove('rolling');
+    }
+  }, 75);
+});
+
+// ── TOKENS ────────────────────────────────────────────────────────────────────
+const TOKENS_DEF = [
+  { id:'t1', color:'#e53e3e', name:'P1' },
+  { id:'t2', color:'#3182ce', name:'P2' },
+  { id:'t3', color:'#38a169', name:'P3' },
+  { id:'t4', color:'#d69e2e', name:'P4' },
+  { id:'t5', color:'#805ad5', name:'P5' },
+  { id:'t6', color:'#dd6b20', name:'P6' },
+];
+
+const tokensLayer = document.getElementById('tokens-layer');
+const bankArea = document.getElementById('bank-area');
+const tokenState = {};
+TOKENS_DEF.forEach(t => { tokenState[t.id] = { inBank: true, x: 0, y: 0 }; });
+
+function renderAllTokens() {
+  tokensLayer.innerHTML = '';
+  bankArea.innerHTML = '';
+  TOKENS_DEF.forEach(t => {
+    const st = tokenState[t.id];
+    const el = document.createElement('div');
+    el.className = 'token';
+    el.id = `tok-${t.id}`;
+    el.style.background = t.color;
+    el.textContent = t.name;
+    if (st.inBank) {
+      el.style.position = 'relative';
+      el.style.left = ''; el.style.top = '';
+      bankArea.appendChild(el);
+    } else {
+      el.style.left = st.x + '%';
+      el.style.top  = st.y + '%';
+      tokensLayer.appendChild(el);
+    }
+    makeDraggable(el, t.id);
+  });
+}
+
+function makeDraggable(el, tid) {
+  let startMouseX, startMouseY, startElX, startElY, active = false;
+  const wrap = () => document.getElementById('board-wrap');
+
+  function onDown(e) {
+    e.preventDefault(); e.stopPropagation(); active = true;
+    const br = wrap().getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    startMouseX = touch.clientX; startMouseY = touch.clientY;
+    if (tokenState[tid].inBank) {
+      startElX = touch.clientX - br.left - 18;
+      startElY = touch.clientY - br.top  - 18;
+    } else {
+      startElX = tokenState[tid].x / 100 * br.width;
+      startElY = tokenState[tid].y / 100 * br.height;
+    }
+    tokenState[tid].inBank = false;
+    tokenState[tid].x = startElX / br.width  * 100;
+    tokenState[tid].y = startElY / br.height * 100;
+    renderAllTokens();
+    const newEl = document.getElementById(`tok-${tid}`);
+    newEl.classList.add('is-dragging');
+
+    function onMove(ev) {
+      if (!active) return; ev.preventDefault();
+      const mv = ev.touches ? ev.touches[0] : ev;
+      const br2 = wrap().getBoundingClientRect();
+      tokenState[tid].x = (startElX + mv.clientX - startMouseX) / br2.width  * 100;
+      tokenState[tid].y = (startElY + mv.clientY - startMouseY) / br2.height * 100;
+      newEl.style.left = tokenState[tid].x + '%';
+      newEl.style.top  = tokenState[tid].y + '%';
+    }
+    function onUp(ev) {
+      if (!active) return; active = false;
+      newEl.classList.remove('is-dragging');
+      const up = ev.changedTouches ? ev.changedTouches[0] : ev;
+      const sb = document.getElementById('sidebar').getBoundingClientRect();
+      if (up.clientX >= sb.left && up.clientX <= sb.right && up.clientY >= sb.top && up.clientY <= sb.bottom) {
+        tokenState[tid].inBank = true; renderAllTokens();
+      }
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchend', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+  }
+  el.addEventListener('mousedown', onDown);
+  el.addEventListener('touchstart', onDown, { passive: false });
+}
+
+// ── RESET ─────────────────────────────────────────────────────────────────────
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (!confirm('Reset game? All tokens return to the bank.')) return;
+  TOKENS_DEF.forEach(t => { tokenState[t.id] = { inBank: true, x: 0, y: 0 }; });
+  diceEl.textContent = '–';
+  document.getElementById('last-roll').textContent = '';
+  renderAllTokens();
+});
+
+renderAllTokens();
+</script>
+</body>
+</html>
