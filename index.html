@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Game of Life - Financial Literacy</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', sans-serif; background: #e8edf2; color: #1a1a2e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; }
+body { font-family: 'Segoe UI', sans-serif; background: #e8edf2; color: #1a1a2e; height: 100vh; display: flex; flex-direction: column; overflow: hidden; user-select: none; -webkit-user-select: none; }
 
 #titlebar {
   height: 32px; background: #1a1a2e; display: flex; align-items: center;
@@ -97,14 +98,28 @@ body { font-family: 'Segoe UI', sans-serif; background: #e8edf2; color: #1a1a2e;
 .z-retire  { background: #3d2e00; }
 
 .token {
-  position: absolute; width: 36px; height: 36px; border-radius: 50%;
-  border: 2.5px solid rgba(255,255,255,0.75); display: flex; align-items: center;
-  justify-content: center; font-size: 11px; font-weight: 800; color: #fff;
+  position: absolute;
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,0.75);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: #fff;
   cursor: grab; pointer-events: all;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.6); text-shadow: 0 1px 3px rgba(0,0,0,0.9); z-index: 200;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.6);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  z-index: 200;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
 }
 .token:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.8); transform: scale(1.1); }
 .token.is-dragging { cursor: grabbing; z-index: 9999; transform: scale(1.2); box-shadow: 0 6px 20px rgba(0,0,0,0.9); }
+
+/* Bank tokens use relative positioning */
+.token.in-bank {
+  position: relative;
+  left: auto !important;
+  top: auto !important;
+}
 
 #popup-overlay {
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.72);
@@ -160,24 +175,13 @@ body { font-family: 'Segoe UI', sans-serif; background: #e8edf2; color: #1a1a2e;
 </div>
 
 <script>
-// Grid: 4 rows × 10 cols
-// Row 0: Start1(col0-1), empty(col2-4), Start2(col5-6), empty(col7-9)
-// Row 1: 1,2,3,4,5,6,7,8,9,10  → left to right
-// Row 2: 20,19,18,17,16,15,14,13,12,11  → right to left
-// Row 3: 21,22,23,24,25,26,27,28,29,30  → left to right
-// Row 4: empty(col0-4), End(col5), 33,32,31  (col6-9) → right to left... 
-//        Actually: col0-4 empty, col5=End, col6=33, col7=32, col8=31, col9=empty? 
-//        From spec: 5 empty cols, then End, 33, 32, 31 = 4 items, total 9... col9 empty
-
 const GRID = [
-  // ROW 0 — starts
   [
     { type:'start', emoji:'🎓', label:'START\nCOLLEGE', sub:'Borrow $100.\nStart with $100.', zone:'z-college' },
     { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' },
     { type:'start', emoji:'💼', label:'START\nCAREER', sub:'Draw 2 workforce\ncareer cards\n& choose 1.\nStart with $100.', zone:'z-general' },
     { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' },
   ],
-  // ROW 1 — left→right, 1–10
   [
     { type:'space', num:'1',  emoji:'🎓', label:'Scholarship',     popup:'Scholarship! Collect $20.',                                                        mand:false, zone:'z-college', arrow:'→' },
     { type:'space', num:'2',  emoji:'📚', label:'Textbooks',       popup:'Textbooks & Fees. Pay $15.',                                                       mand:false, zone:'z-college', arrow:'→' },
@@ -188,22 +192,20 @@ const GRID = [
     { type:'space', num:'7',  emoji:'🏥', label:'Medical\nExp.',   popup:'Medical Expense. Pay $20.',                                                        mand:false, zone:'z-general', arrow:'→' },
     { type:'space', num:'8',  emoji:'👔', label:'Mentor',          popup:'Professional Mentor! Collect $20.',                                                mand:false, zone:'z-general', arrow:'→' },
     { type:'space', num:'9',  emoji:'🚚', label:'Relocation',      popup:'Relocation for Work. Pay $15.',                                                    mand:false, zone:'z-general', arrow:'→' },
-    { type:'space', num:'10', emoji:'🏠', label:'Housing\nChoice', popup:'Choose Your Housing! House or Apartment? Pick a housing card.',                                         mand:true,  zone:'z-housing', arrow:'↓' },
+    { type:'space', num:'10', emoji:'🏠', label:'Housing\nChoice', popup:'Choose Your Housing! House or Apartment? Pick a housing card.',                    mand:true,  zone:'z-housing', arrow:'↓' },
   ],
-  // ROW 2 — right→left, 20–11
   [
     { type:'space', num:'20', emoji:'💍', label:'Marriage',         popup:'Marriage! Draw 2 Spouse Cards. Choose 1 spouse card or remain single.',           mand:true,  zone:'z-family',  arrow:'↓' },
     { type:'space', num:'19', emoji:'🎁', label:'Annual\nBonus',   popup:'Annual Bonus! Collect $30.',                                                       mand:false, zone:'z-family',  arrow:'←' },
     { type:'space', num:'18', emoji:'📉', label:'Layoff',          popup:'Layoff! Miss your next paycheck.',                                                 mand:false, zone:'z-vehicle', arrow:'←' },
     { type:'space', num:'17', emoji:'📈', label:'Promotion',       popup:'Promotion Opportunity! Collect $10 if you have a college degree. Otherwise, collect $5.', mand:false, zone:'z-vehicle', arrow:'←' },
     { type:'space', num:'16', emoji:'🔧', label:'Car Repair',      popup:'Car Repair. Used Car: Pay $20. New Car: Pay $10. Luxury Vehicle: Pay $10.',        mand:false, zone:'z-vehicle', arrow:'←' },
-    { type:'space', num:'15', emoji:'🚗', label:'Vehicle\nChoice', popup:'Choose Your Vehicle! Used, New, or Luxury? Pick a vehicle card.',                    mand:true,  zone:'z-vehicle', arrow:'←' },
+    { type:'space', num:'15', emoji:'🚗', label:'Vehicle\nChoice', popup:'Choose Your Vehicle! Used, New, or Luxury? Pick a vehicle card.',                  mand:true,  zone:'z-vehicle', arrow:'←' },
     { type:'space', num:'14', emoji:'🌪', label:'Natural\nDisaster',popup:'Natural Disaster. Pay $15.',                                                      mand:false, zone:'z-housing', arrow:'←' },
     { type:'space', num:'13', emoji:'🧾', label:'Tax Refund',      popup:'Tax Refund! Collect $20.',                                                         mand:false, zone:'z-housing', arrow:'←' },
     { type:'space', num:'12', emoji:'📈', label:'Cost of\nLiving', popup:'Cost of Living Increase. Pay $10.',                                                mand:false, zone:'z-housing', arrow:'←' },
     { type:'space', num:'11', emoji:'🏠', label:'Rent\nIncrease',  popup:'Rent Increase. Pay $10.',                                                          mand:false, zone:'z-housing', arrow:'←' },
   ],
-  // ROW 3 — left→right, 21–30
   [
     { type:'space', num:'21', emoji:'👨‍👩‍👧', label:'Family\nDecisions', popup:'Family Decisions! 0, 1, 2, or 3 children? Draw that number of child cards.',     mand:true,  zone:'z-family',  arrow:'→' },
     { type:'space', num:'22', emoji:'👶', label:'Childcare',        popup:'Childcare Costs. If you have children, pay $20 per child.',                       mand:false, zone:'z-family',  arrow:'→' },
@@ -216,7 +218,6 @@ const GRID = [
     { type:'space', num:'29', emoji:'📈', label:'Stock\nMarket',    popup:'Stock Market Growth! Collect $20.',                                               mand:false, zone:'z-later',   arrow:'→' },
     { type:'space', num:'30', emoji:'📉', label:'Recession',        popup:'Economic Recession. Collect $10 less at your next payday.',                       mand:false, zone:'z-later',   arrow:'↓' },
   ],
-  // ROW 4 — empty(0-4), End(5), 33,32,31 (6-8), empty(9)
   [
     { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' }, { type:'empty' },
     { type:'end' },
@@ -232,13 +233,11 @@ gridEl.style.gridTemplateRows = `repeat(${GRID.length}, 1fr)`;
 GRID.forEach(row => {
   row.forEach(cell => {
     const div = document.createElement('div');
-
     if (cell.type === 'empty') {
       div.className = 'cell cell-empty';
       gridEl.appendChild(div);
       return;
     }
-
     if (cell.type === 'start') {
       div.className = `cell cell-start ${cell.zone}`;
       const lines = cell.sub.split('\n').map(l => `<span class="c-label" style="font-size:11px;">${l}</span>`).join('');
@@ -246,15 +245,12 @@ GRID.forEach(row => {
       gridEl.appendChild(div);
       return;
     }
-
     if (cell.type === 'end') {
       div.className = 'cell cell-end z-retire';
       div.innerHTML = `<span class="c-emoji" style="font-size:26px">🎉</span><span class="c-label" style="font-size:14px;font-weight:900;color:#fff;">RETIREMENT</span><span class="c-label" style="font-size:11px;color:#f3e5f5;">Calculate Net Worth</span>`;
       gridEl.appendChild(div);
       return;
     }
-
-    // Regular space
     div.className = `cell ${cell.zone}${cell.mand ? ' cell-mandatory' : ''}`;
     div.innerHTML = `
       <span class="c-num">${cell.num}</span>
@@ -309,84 +305,124 @@ const TOKENS_DEF = [
 ];
 
 const tokensLayer = document.getElementById('tokens-layer');
-const bankArea = document.getElementById('bank-area');
+const bankArea    = document.getElementById('bank-area');
+
+// State: inBank=true means sitting in sidebar; x/y are % of board-wrap
 const tokenState = {};
 TOKENS_DEF.forEach(t => { tokenState[t.id] = { inBank: true, x: 0, y: 0 }; });
 
 function renderAllTokens() {
   tokensLayer.innerHTML = '';
-  bankArea.innerHTML = '';
+  bankArea.innerHTML    = '';
   TOKENS_DEF.forEach(t => {
-    const st = tokenState[t.id];
-    const el = document.createElement('div');
-    el.className = 'token';
-    el.id = `tok-${t.id}`;
+    const st  = tokenState[t.id];
+    const el  = document.createElement('div');
+    el.className   = 'token' + (st.inBank ? ' in-bank' : '');
+    el.id          = `tok-${t.id}`;
     el.style.background = t.color;
     el.textContent = t.name;
-    if (st.inBank) {
-      el.style.position = 'relative';
-      el.style.left = ''; el.style.top = '';
-      bankArea.appendChild(el);
-    } else {
+    if (!st.inBank) {
       el.style.left = st.x + '%';
       el.style.top  = st.y + '%';
       tokensLayer.appendChild(el);
+    } else {
+      bankArea.appendChild(el);
     }
     makeDraggable(el, t.id);
   });
 }
 
+function getPoint(e) {
+  if (e.touches && e.touches.length)        return e.touches[0];
+  if (e.changedTouches && e.changedTouches.length) return e.changedTouches[0];
+  return e;
+}
+
 function makeDraggable(el, tid) {
-  let startMouseX, startMouseY, startElX, startElY, active = false;
-  const wrap = () => document.getElementById('board-wrap');
+  let active = false;
+  let startMouseX, startMouseY, startElPxX, startElPxY;
 
   function onDown(e) {
-    e.preventDefault(); e.stopPropagation(); active = true;
-    const br = wrap().getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
-    startMouseX = touch.clientX; startMouseY = touch.clientY;
+    // Only handle left-button or touch
+    if (e.type === 'mousedown' && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const pt   = getPoint(e);
+    const wrap = document.getElementById('board-wrap');
+    const br   = wrap.getBoundingClientRect();
+
+    // If token is in bank, we need to move it to the board first
+    // WITHOUT calling renderAllTokens (which destroys the element mid-drag)
     if (tokenState[tid].inBank) {
-      startElX = touch.clientX - br.left - 18;
-      startElY = touch.clientY - br.top  - 18;
-    } else {
-      startElX = tokenState[tid].x / 100 * br.width;
-      startElY = tokenState[tid].y / 100 * br.height;
+      // Calculate initial position centered under finger
+      const px = pt.clientX - br.left - 18;
+      const py = pt.clientY - br.top  - 18;
+      tokenState[tid].inBank = false;
+      tokenState[tid].x = (px / br.width)  * 100;
+      tokenState[tid].y = (py / br.height) * 100;
+
+      // Move element from bank into tokensLayer manually (no re-render)
+      el.classList.remove('in-bank');
+      el.style.position = 'absolute';
+      el.style.left = tokenState[tid].x + '%';
+      el.style.top  = tokenState[tid].y + '%';
+      tokensLayer.appendChild(el);
     }
-    tokenState[tid].inBank = false;
-    tokenState[tid].x = startElX / br.width  * 100;
-    tokenState[tid].y = startElY / br.height * 100;
-    renderAllTokens();
-    const newEl = document.getElementById(`tok-${tid}`);
-    newEl.classList.add('is-dragging');
+
+    active = true;
+    const br2 = document.getElementById('board-wrap').getBoundingClientRect();
+    startMouseX  = pt.clientX;
+    startMouseY  = pt.clientY;
+    startElPxX   = tokenState[tid].x / 100 * br2.width;
+    startElPxY   = tokenState[tid].y / 100 * br2.height;
+
+    el.classList.add('is-dragging');
 
     function onMove(ev) {
-      if (!active) return; ev.preventDefault();
-      const mv = ev.touches ? ev.touches[0] : ev;
-      const br2 = wrap().getBoundingClientRect();
-      tokenState[tid].x = (startElX + mv.clientX - startMouseX) / br2.width  * 100;
-      tokenState[tid].y = (startElY + mv.clientY - startMouseY) / br2.height * 100;
-      newEl.style.left = tokenState[tid].x + '%';
-      newEl.style.top  = tokenState[tid].y + '%';
+      if (!active) return;
+      ev.preventDefault();
+      const pt2  = getPoint(ev);
+      const br3  = document.getElementById('board-wrap').getBoundingClientRect();
+      let nx = (startElPxX + pt2.clientX - startMouseX) / br3.width  * 100;
+      let ny = (startElPxY + pt2.clientY - startMouseY) / br3.height * 100;
+      nx = Math.max(0, Math.min(nx, 96));
+      ny = Math.max(0, Math.min(ny, 96));
+      tokenState[tid].x = nx;
+      tokenState[tid].y = ny;
+      el.style.left = nx + '%';
+      el.style.top  = ny + '%';
     }
+
     function onUp(ev) {
-      if (!active) return; active = false;
-      newEl.classList.remove('is-dragging');
-      const up = ev.changedTouches ? ev.changedTouches[0] : ev;
-      const sb = document.getElementById('sidebar').getBoundingClientRect();
-      if (up.clientX >= sb.left && up.clientX <= sb.right && up.clientY >= sb.top && up.clientY <= sb.bottom) {
-        tokenState[tid].inBank = true; renderAllTokens();
+      if (!active) return;
+      active = false;
+      el.classList.remove('is-dragging');
+
+      const pt3 = getPoint(ev);
+      const sb  = document.getElementById('sidebar').getBoundingClientRect();
+      const overSidebar =
+        pt3.clientX >= sb.left && pt3.clientX <= sb.right &&
+        pt3.clientY >= sb.top  && pt3.clientY <= sb.bottom;
+
+      if (overSidebar) {
+        tokenState[tid].inBank = true;
+        renderAllTokens(); // safe to re-render here since drag is done
       }
+
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.removeEventListener('touchend', onUp);
+      document.removeEventListener('mouseup',   onUp);
+      document.removeEventListener('touchend',  onUp);
     }
+
     document.addEventListener('mousemove', onMove);
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('mouseup', onUp);
-    document.addEventListener('touchend', onUp);
+    document.addEventListener('touchmove',  onMove, { passive: false });
+    document.addEventListener('mouseup',   onUp);
+    document.addEventListener('touchend',  onUp);
   }
-  el.addEventListener('mousedown', onDown);
+
+  el.addEventListener('mousedown',  onDown);
   el.addEventListener('touchstart', onDown, { passive: false });
 }
 
